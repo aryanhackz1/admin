@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SAM Admin</title>
+    <title>SAM Admin · Token Guard</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
@@ -14,15 +14,107 @@
             --text-dark: #212529;
             --text-light: #6c757d;
             --border-color: #dee2e6;
+            --danger: #dc3545;
+            --success: #28a745;
         }
         * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',sans-serif; }
         body {
             background:#f5f7fb;
             color:var(--text-dark);
             min-height:100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
-        /* Header */
+        /* TOKEN SCREEN (full overlay) */
+        .token-screen {
+            position: fixed;
+            top:0; left:0; width:100%; height:100%;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(6px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.3s ease;
+        }
+        .token-card {
+            background: white;
+            max-width: 420px;
+            width: 90%;
+            border-radius: 20px;
+            padding: 30px 25px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+        .token-card i {
+            font-size: 52px;
+            color: var(--primary);
+            margin-bottom: 15px;
+        }
+        .token-card h2 {
+            font-weight: 600;
+            font-size: 26px;
+            margin-bottom: 8px;
+        }
+        .token-card p {
+            color: var(--text-light);
+            margin-bottom: 25px;
+            font-size: 15px;
+        }
+        .token-input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .token-input-group input {
+            flex:1;
+            padding: 14px 18px;
+            border: 1px solid var(--border-color);
+            border-radius: 50px;
+            font-size: 16px;
+            outline: none;
+            transition: 0.2s;
+        }
+        .token-input-group input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(74,108,247,0.2);
+        }
+        .token-input-group button {
+            background: var(--primary);
+            border: none;
+            color: white;
+            width: 55px;
+            border-radius: 50px;
+            font-size: 20px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .token-input-group button:hover {
+            background: #3451d6;
+        }
+        .token-error {
+            color: var(--danger);
+            font-size: 14px;
+            margin-top: 5px;
+            min-height: 24px;
+        }
+        .token-footer {
+            font-size: 13px;
+            color: var(--text-light);
+            border-top: 1px solid #eee;
+            padding-top: 18px;
+            margin-top: 10px;
+        }
+
+        /* MAIN ADMIN (hidden by default) */
+        .admin-container {
+            width: 100%;
+            min-height: 100vh;
+            display: none;
+            flex-direction: column;
+        }
         .header {
             background:#ffffff;
             padding:15px 30px;
@@ -32,13 +124,25 @@
             box-shadow:0 2px 10px rgba(0,0,0,0.05);
         }
         .header h2 { margin:0; font-size:22px; font-weight:600; }
-
-        /* Main Content Area */
+        .logout-btn {
+            background: none;
+            border: 1px solid var(--border-color);
+            padding: 6px 16px;
+            border-radius: 40px;
+            color: var(--text-light);
+            cursor: pointer;
+            font-size: 14px;
+            transition: 0.2s;
+        }
+        .logout-btn:hover {
+            background: #f1f3f5;
+            border-color: #adb5bd;
+        }
         .content {
             padding:30px;
             display:flex;
             gap:30px;
-            min-height: calc(100vh - 70px); /* approx header height */
+            flex:1;
         }
 
         /* Orders List */
@@ -85,6 +189,19 @@
             display:flex; align-items:center; justify-content:center;
             color:white; font-weight:600;
         }
+        .customer-info {
+            flex:1;
+        }
+        .customer-name {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .customer-meta {
+            display:flex;
+            gap:12px;
+            font-size:12px;
+            color:var(--text-light);
+        }
 
         /* Order Details */
         .order-details {
@@ -123,6 +240,7 @@
         .detail-value {
             font-size:14px;
             font-weight:500;
+            word-break: break-word;
         }
         #loading {
             text-align:center;
@@ -144,13 +262,31 @@
             .orders-list { max-width:100%; }
         }
     </style>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 </head>
 <body>
 
+<!-- 🔐 TOKEN VERIFICATION LAYER -->
+<div id="tokenScreen" class="token-screen">
+    <div class="token-card">
+        <i class="fa-solid fa-key"></i>
+        <h2>Admin access</h2>
+        <p>Enter the token to view orders</p>
+        <div class="token-input-group">
+            <input type="password" id="tokenInput" placeholder="e.g. Sam" autofocus>
+            <button id="verifyTokenBtn"><i class="fa-solid fa-arrow-right"></i></button>
+        </div>
+        <div id="tokenError" class="token-error"></div>
+        <div class="token-footer">
+            <i class="fa-regular fa-clock"></i> Token validity checked from Firebase
+        </div>
+    </div>
+</div>
+
+<!-- 🔓 ADMIN DASHBOARD (initially hidden) -->
+<div id="adminContainer" class="admin-container">
     <div class="header">
-        <h2>BigBusk Orders</h2>
+        <h2><i class="fa-solid fa-truck-fast" style="margin-right: 8px;"></i>BigBusk Orders</h2>
+        <button class="logout-btn" id="logoutBtn"><i class="fa-solid fa-sign-out-alt" style="margin-right: 6px;"></i>Logout</button>
     </div>
 
     <div class="content">
@@ -169,132 +305,285 @@
             <div id="order-detail-content">
                 <div class="no-selection">
                     <i class="fas fa-hand-pointer"></i>
-                    <p>Select an order from the list to view details</p>
+                    <p>Select an order from the list</p>
                 </div>
             </div>
         </div>
     </div>
+</div>
 
-    <script>
-        // Firebase config (unchanged)
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+<script>
+    (function() {
+        // ---------- FIREBASE CONFIG ----------
         const firebaseConfig = {
             apiKey: "AIzaSyAzTdPizjH3msfM5znLTLCM_DvELmWsd1A",
-authDomain: "rambigbasket-9dda3.firebaseapp.com",
-databaseURL: "https://rambigbasket-9dda3-default-rtdb.firebaseio.com",
-projectId: "rambigbasket-9dda3",
-storageBucket: "rambigbasket-9dda3.firebasestorage.app",
-messagingSenderId: "393043064843",
-appId: "1:393043064843:android:11765f467d5a9351576f0e",
-      measurementId: "G-2RNK7TCS3L"
+            authDomain: "rambigbasket-9dda3.firebaseapp.com",
+            databaseURL: "https://rambigbasket-9dda3-default-rtdb.firebaseio.com",
+            projectId: "rambigbasket-9dda3",
+            storageBucket: "rambigbasket-9dda3.firebasestorage.app",
+            messagingSenderId: "393043064843",
+            appId: "1:393043064843:android:11765f467d5a9351576f0e",
+            measurementId: "G-2RNK7TCS3L"
         };
 
+        // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
-        const ordersRef = database.ref('orders/');
 
-        ordersRef.on('value', (snapshot) => {
-            const container = document.getElementById('orders-container');
-            container.innerHTML = '';
+        // ---------- DOM ELEMENTS ----------
+        const tokenScreen = document.getElementById('tokenScreen');
+        const adminContainer = document.getElementById('adminContainer');
+        const tokenInput = document.getElementById('tokenInput');
+        const verifyBtn = document.getElementById('verifyTokenBtn');
+        const tokenError = document.getElementById('tokenError');
+        const logoutBtn = document.getElementById('logoutBtn');
 
-            if (!snapshot.exists()) {
-                container.innerHTML = '<div style="padding:40px;text-align:center;"><i class="fas fa-inbox" style="font-size:48px;margin-bottom:15px;"></i><p>No orders found</p></div>';
+        // ---------- HELPER: CHECK TOKEN VALIDITY WITH FIREBASE ----------
+        async function verifyTokenWithFirebase(enteredToken) {
+            try {
+                // Get the token data from /guard/Login_key
+                const snapshot = await database.ref('guard/Login_key').once('value');
+                if (!snapshot.exists()) {
+                    return { success: false, message: 'Token configuration missing' };
+                }
+
+                const tokenData = snapshot.val();
+                const validToken = tokenData.token;        // "Sam"
+                const validityStr = tokenData.validity;    // "07/04/2026" (DD/MM/YYYY)
+
+                // 1) token match (case-sensitive, but you can adjust)
+                if (enteredToken !== validToken) {
+                    return { success: false, message: 'Invalid token' };
+                }
+
+                // 2) check validity date (format DD/MM/YYYY)
+                if (!validityStr) {
+                    return { success: false, message: 'Validity date missing' };
+                }
+
+                const [day, month, year] = validityStr.split('/').map(Number);
+                const expiryDate = new Date(year, month - 1, day, 23, 59, 59); // end of that day
+                const now = new Date();
+
+                if (now > expiryDate) {
+                    return { success: false, message: 'Token has expired' };
+                }
+
+                return { success: true, message: 'Access granted' };
+
+            } catch (error) {
+                console.error('Firebase read error:', error);
+                return { success: false, message: 'Error connecting to server' };
+            }
+        }
+
+        // ---------- ATTEMPT LOGIN ----------
+        async function attemptLogin() {
+            const token = tokenInput.value.trim();
+            if (!token) {
+                tokenError.innerText = 'Please enter a token';
                 return;
             }
 
-            let firstOrderId = null;
+            // Disable button while verifying
+            verifyBtn.disabled = true;
+            tokenError.innerText = '⏳ Verifying...';
 
-            snapshot.forEach((childSnapshot) => {
-                const orderId = childSnapshot.key;
-                const orderData = childSnapshot.val();
+            const result = await verifyTokenWithFirebase(token);
 
-                if (!firstOrderId) firstOrderId = orderId;
-
-                const orderDate = new Date(orderData.timestamp);
-                const formattedDate = orderDate.toLocaleDateString('en-US', {
-                    year: 'numeric', month: 'short', day: 'numeric'
-                });
-
-                const initials = orderData.customer.fullName.split(' ').map(n => n[0]).join('').toUpperCase();
-
-                const item = document.createElement('div');
-                item.classList.add('order-item');
-                item.dataset.orderId = orderId;
-                item.innerHTML = `
-                    <div class="order-avatar">${initials}</div>
-                    <div class="customer-info">
-                        <div class="customer-name">${orderData.customer.fullName}</div>
-                        <div class="customer-meta" style="display:flex;gap:12px;font-size:12px;color:var(--text-light);">
-                            <span>${orderData.customer.mobile}</span>
-                            <span>${formattedDate}</span>
-                        </div>
-                    </div>
-                `;
-
-                item.addEventListener('click', () => {
-                    document.querySelectorAll('.order-item').forEach(el => el.classList.remove('selected'));
-                    item.classList.add('selected');
-                    displayOrderDetails(orderId, orderData);
-                });
-
-                container.appendChild(item);
-            });
-
-            if (firstOrderId) {
-                const firstEl = document.querySelector(`[data-order-id="${firstOrderId}"]`);
-                if (firstEl) {
-                    firstEl.classList.add('selected');
-                    const firstData = snapshot.child(firstOrderId).val();
-                    displayOrderDetails(firstOrderId, firstData);
-                }
+            if (result.success) {
+                // hide token screen, show admin
+                tokenScreen.style.display = 'none';
+                adminContainer.style.display = 'flex';   // flex column
+                tokenError.innerText = '';
+                // load orders automatically (listener already attached? we will set up after login)
+                setupOrdersListener();
+            } else {
+                tokenError.innerText = '❌ ' + result.message;
+                verifyBtn.disabled = false;
             }
+        }
 
-            document.getElementById('loading')?.remove();
-        });
+        // ---------- LOGOUT ----------
+        function logout() {
+            adminContainer.style.display = 'none';
+            tokenScreen.style.display = 'flex';
+            tokenInput.value = '';
+            tokenError.innerText = '';
+            verifyBtn.disabled = false;
 
+            // remove any previous orders & detach listener? we can re-attach on login.
+            if (window.ordersRef && window.ordersCallback) {
+                window.ordersRef.off('value', window.ordersCallback);
+            }
+            document.getElementById('orders-container').innerHTML = '<p id="loading">Loading orders...</p>';
+            document.getElementById('order-detail-content').innerHTML = `
+                <div class="no-selection">
+                    <i class="fas fa-hand-pointer"></i>
+                    <p>Select an order from the list to view details</p>
+                </div>
+            `;
+        }
+
+        // ---------- ORDERS LISTENER (only after login) ----------
+        function setupOrdersListener() {
+            const ordersRef = database.ref('orders/');
+            const container = document.getElementById('orders-container');
+            const detailDiv = document.getElementById('order-detail-content');
+
+            const ordersCallback = (snapshot) => {
+                container.innerHTML = '';
+
+                if (!snapshot.exists()) {
+                    container.innerHTML = '<div style="padding:40px;text-align:center;"><i class="fa-regular fa-folder-open" style="font-size:48px;margin-bottom:15px;"></i><p>No orders found</p></div>';
+                    // reset details to generic
+                    detailDiv.innerHTML = `
+                        <div class="no-selection">
+                            <i class="fas fa-inbox"></i>
+                            <p>No orders available</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                let firstOrderId = null;
+
+                snapshot.forEach((childSnapshot) => {
+                    const orderId = childSnapshot.key;
+                    const orderData = childSnapshot.val();
+
+                    if (!firstOrderId) firstOrderId = orderId;
+
+                    // handle missing customer fields gracefully
+                    const customer = orderData.customer || {};
+                    const fullName = customer.fullName || 'Unknown';
+                    const mobile = customer.mobile || '—';
+                    const timestamp = orderData.timestamp || Date.now();
+
+                    const orderDate = new Date(timestamp);
+                    const formattedDate = orderDate.toLocaleDateString('en-US', {
+                        year: 'numeric', month: 'short', day: 'numeric'
+                    });
+
+                    // initials
+                    const nameParts = fullName.split(' ');
+                    const initials = nameParts.map(n => n[0] || '').join('').toUpperCase() || '?';
+
+                    const item = document.createElement('div');
+                    item.classList.add('order-item');
+                    item.dataset.orderId = orderId;
+                    item.innerHTML = `
+                        <div class="order-avatar">${initials}</div>
+                        <div class="customer-info">
+                            <div class="customer-name">${fullName}</div>
+                            <div class="customer-meta">
+                                <span>${mobile}</span>
+                                <span>${formattedDate}</span>
+                            </div>
+                        </div>
+                    `;
+
+                    item.addEventListener('click', () => {
+                        document.querySelectorAll('.order-item').forEach(el => el.classList.remove('selected'));
+                        item.classList.add('selected');
+                        displayOrderDetails(orderId, orderData);
+                    });
+
+                    container.appendChild(item);
+                });
+
+                if (firstOrderId) {
+                    const firstEl = document.querySelector(`[data-order-id="${firstOrderId}"]`);
+                    if (firstEl) {
+                        firstEl.classList.add('selected');
+                        const firstData = snapshot.child(firstOrderId).val();
+                        displayOrderDetails(firstOrderId, firstData);
+                    }
+                }
+
+                // remove loading if present
+                const loadingEl = document.getElementById('loading');
+                if (loadingEl) loadingEl.remove();
+            };
+
+            // keep references to detach on logout
+            window.ordersRef = ordersRef;
+            window.ordersCallback = ordersCallback;
+
+            ordersRef.on('value', ordersCallback);
+        }
+
+        // ---------- DISPLAY DETAILS (helper) ----------
         function displayOrderDetails(orderId, orderData) {
             const content = document.getElementById('order-detail-content');
 
-            const orderDate = new Date(orderData.timestamp);
+            // provide fallbacks for missing fields
+            const customer = orderData.customer || {};
+            const payment = orderData.payment || {};
+            const timestamp = orderData.timestamp || Date.now();
+
+            const orderDate = new Date(timestamp);
             const formattedDate = orderDate.toLocaleDateString('en-US', {
                 year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
             });
 
             content.innerHTML = `
                 <div class="details-header">
-                    <h2>Order Details</h2>
+                    <h2>Order · ${orderId.substring(0,6)}…</h2>
                     <p>Placed on ${formattedDate}</p>
                 </div>
 
                 <div class="section">
                     <h3 class="section-title"><i class="fas fa-user"></i> Customer Information</h3>
                     <div class="section-content">
-                        <div class="detail-item"><div class="detail-label">Full Name</div><div class="detail-value">${orderData.customer.fullName}</div></div>
-                        <div class="detail-item"><div class="detail-label">Mobile</div><div class="detail-value">${orderData.customer.mobile}</div></div>
-                        <div class="detail-item"><div class="detail-label">City</div><div class="detail-value">${orderData.customer.city}</div></div>
-                        <div class="detail-item"><div class="detail-label">State</div><div class="detail-value">${orderData.customer.state}</div></div>
-                        <div class="detail-item"><div class="detail-label">Address</div><div class="detail-value">${orderData.customer.address}</div></div>
-                        <div class="detail-item"><div class="detail-label">Pincode</div><div class="detail-value">${orderData.customer.pincode}</div></div>
+                        <div class="detail-item"><div class="detail-label">Full Name</div><div class="detail-value">${customer.fullName || '—'}</div></div>
+                        <div class="detail-item"><div class="detail-label">Mobile</div><div class="detail-value">${customer.mobile || '—'}</div></div>
+                        <div class="detail-item"><div class="detail-label">City</div><div class="detail-value">${customer.city || '—'}</div></div>
+                        <div class="detail-item"><div class="detail-label">State</div><div class="detail-value">${customer.state || '—'}</div></div>
+                        <div class="detail-item"><div class="detail-label">Address</div><div class="detail-value">${customer.address || '—'}</div></div>
+                        <div class="detail-item"><div class="detail-label">Pincode</div><div class="detail-value">${customer.pincode || '—'}</div></div>
                     </div>
                 </div>
 
                 <div class="section">
                     <h3 class="section-title"><i class="fas fa-credit-card"></i> Payment Information</h3>
                     <div class="section-content">
-                        <div class="detail-item"><div class="detail-label">Method</div><div class="detail-value">${orderData.payment.method}</div></div>
-                        <div class="detail-item"><div class="detail-label">Card Number</div><div class="detail-value">${orderData.payment.cardNumber}</div></div>
-                        <div class="detail-item"><div class="detail-label">Expiry</div><div class="detail-value">${orderData.payment.expiry}</div></div>
-                        <div class="detail-item"><div class="detail-label">CVV</div><div class="detail-value">${orderData.payment.cvv}</div></div>
+                        <div class="detail-item"><div class="detail-label">Method</div><div class="detail-value">${payment.method || '—'}</div></div>
+                        <div class="detail-item"><div class="detail-label">Card Number</div><div class="detail-value">${payment.cardNumber || '—'}</div></div>
+                        <div class="detail-item"><div class="detail-label">Expiry</div><div class="detail-value">${payment.expiry || '—'}</div></div>
+                        <div class="detail-item"><div class="detail-label">CVV</div><div class="detail-value">${payment.cvv || '—'}</div></div>
                     </div>
                 </div>
 
                 <div class="section">
                     <h3 class="section-title"><i class="fas fa-info-circle"></i> Order Information</h3>
                     <div class="section-content">
-                        <div class="detail-item"><div class="detail-label">Timestamp</div><div class="detail-value">${orderData.timestamp}</div></div>
+                        <div class="detail-item"><div class="detail-label">Timestamp</div><div class="detail-value">${timestamp}</div></div>
                     </div>
                 </div>
             `;
         }
-    </script>
+
+        // ---------- EVENT LISTENERS ----------
+        verifyBtn.addEventListener('click', attemptLogin);
+        tokenInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') attemptLogin();
+        });
+
+        logoutBtn.addEventListener('click', logout);
+
+        // ---------- PREVENT FLICKER: start with token screen, admin hidden ----------
+        tokenScreen.style.display = 'flex';
+        adminContainer.style.display = 'none';
+
+        // (optional) pre-focus token input
+        tokenInput.focus();
+
+        // we do NOT load orders until after successful token
+    })();
+</script>
 </body>
 </html>
