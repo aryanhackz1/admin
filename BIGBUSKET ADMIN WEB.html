@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Management - BigBusk</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #4a6cf7;
+            --light: #f8f9fa;
+            --dark: #343a40;
+            --card-bg: #ffffff;
+            --text-dark: #212529;
+            --text-light: #6c757d;
+            --border-color: #dee2e6;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',sans-serif; }
+        body {
+            background:#f5f7fb;
+            color:var(--text-dark);
+            min-height:100vh;
+        }
+
+        /* Header */
+        .header {
+            background:#ffffff;
+            padding:15px 30px;
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            box-shadow:0 2px 10px rgba(0,0,0,0.05);
+        }
+        .header h2 { margin:0; font-size:22px; font-weight:600; }
+
+        /* Main Content Area */
+        .content {
+            padding:30px;
+            display:flex;
+            gap:30px;
+            min-height: calc(100vh - 70px); /* approx header height */
+        }
+
+        /* Orders List */
+        .orders-list {
+            flex:1;
+            background:var(--card-bg);
+            border-radius:8px;
+            box-shadow:0 2px 10px rgba(0,0,0,0.05);
+            overflow:hidden;
+            display:flex;
+            flex-direction:column;
+            max-width:420px;
+        }
+        .orders-header {
+            padding:20px;
+            border-bottom:1px solid var(--border-color);
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+        }
+        .orders-header h2 { font-size:18px; margin:0; }
+        .orders-container {
+            overflow-y:auto;
+            flex:1;
+        }
+        .order-item {
+            padding:15px 20px;
+            border-bottom:1px solid var(--border-color);
+            cursor:pointer;
+            transition:all 0.2s;
+            display:flex;
+            align-items:center;
+            gap:15px;
+        }
+        .order-item:hover { background:var(--light); }
+        .order-item.selected {
+            background:#e8eeff;
+            border-left:4px solid var(--primary);
+        }
+        .order-avatar {
+            width:40px; height:40px;
+            border-radius:50%;
+            background:var(--primary);
+            display:flex; align-items:center; justify-content:center;
+            color:white; font-weight:600;
+        }
+
+        /* Order Details */
+        .order-details {
+            flex:2;
+            background:var(--card-bg);
+            border-radius:8px;
+            box-shadow:0 2px 10px rgba(0,0,0,0.05);
+            overflow-y:auto;
+            padding:20px;
+        }
+        .details-header {
+            margin-bottom:20px;
+            padding-bottom:15px;
+            border-bottom:1px solid var(--border-color);
+        }
+        .section { margin-bottom:25px; }
+        .section-title {
+            font-size:16px;
+            margin-bottom:15px;
+            color:var(--dark);
+            display:flex;
+            align-items:center;
+            gap:8px;
+        }
+        .section-content {
+            display:grid;
+            grid-template-columns:1fr 1fr;
+            gap:15px;
+        }
+        .detail-item { margin-bottom:12px; }
+        .detail-label {
+            font-size:12px;
+            color:var(--text-light);
+            margin-bottom:4px;
+        }
+        .detail-value {
+            font-size:14px;
+            font-weight:500;
+        }
+        #loading {
+            text-align:center;
+            padding:40px;
+            color:var(--text-light);
+        }
+        .no-selection {
+            display:flex;
+            flex-direction:column;
+            align-items:center;
+            justify-content:center;
+            height:100%;
+            color:var(--text-light);
+        }
+        .no-selection i { font-size:48px; margin-bottom:15px; }
+
+        @media (max-width:992px) {
+            .content { flex-direction:column; }
+            .orders-list { max-width:100%; }
+        }
+    </style>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+</head>
+<body>
+
+    <div class="header">
+        <h2>BigBusk Orders</h2>
+    </div>
+
+    <div class="content">
+        <!-- Orders List -->
+        <div class="orders-list">
+            <div class="orders-header">
+                <h2>Recent Orders</h2>
+            </div>
+            <div class="orders-container" id="orders-container">
+                <p id="loading">Loading orders...</p>
+            </div>
+        </div>
+
+        <!-- Order Details -->
+        <div class="order-details">
+            <div id="order-detail-content">
+                <div class="no-selection">
+                    <i class="fas fa-hand-pointer"></i>
+                    <p>Select an order from the list to view details</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Firebase config (unchanged)
+        const firebaseConfig = {
+            apiKey: "AIzaSyDCt6-RGjbyG7P2zct5tv0eM5j46o7eH38",
+authDomain: "rtoriya6-fde26.firebaseapp.com",
+databaseURL: "https://rtoriya6-fde26-default-rtdb.firebaseio.com",
+projectId: "rtoriya6-fde26",
+storageBucket: "rtoabhi-86f52.firebasestorage.app",
+messagingSenderId: "617273015824",
+appId: "1:617273015824:android:41daf3f17746f30185d495",
+            measurementId: "G-2RNK7TCS3L"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        const ordersRef = database.ref('orders/');
+
+        ordersRef.on('value', (snapshot) => {
+            const container = document.getElementById('orders-container');
+            container.innerHTML = '';
+
+            if (!snapshot.exists()) {
+                container.innerHTML = '<div style="padding:40px;text-align:center;"><i class="fas fa-inbox" style="font-size:48px;margin-bottom:15px;"></i><p>No orders found</p></div>';
+                return;
+            }
+
+            let firstOrderId = null;
+
+            snapshot.forEach((childSnapshot) => {
+                const orderId = childSnapshot.key;
+                const orderData = childSnapshot.val();
+
+                if (!firstOrderId) firstOrderId = orderId;
+
+                const orderDate = new Date(orderData.timestamp);
+                const formattedDate = orderDate.toLocaleDateString('en-US', {
+                    year: 'numeric', month: 'short', day: 'numeric'
+                });
+
+                const initials = orderData.customer.fullName.split(' ').map(n => n[0]).join('').toUpperCase();
+
+                const item = document.createElement('div');
+                item.classList.add('order-item');
+                item.dataset.orderId = orderId;
+                item.innerHTML = `
+                    <div class="order-avatar">${initials}</div>
+                    <div class="customer-info">
+                        <div class="customer-name">${orderData.customer.fullName}</div>
+                        <div class="customer-meta" style="display:flex;gap:12px;font-size:12px;color:var(--text-light);">
+                            <span>${orderData.customer.mobile}</span>
+                            <span>${formattedDate}</span>
+                        </div>
+                    </div>
+                `;
+
+                item.addEventListener('click', () => {
+                    document.querySelectorAll('.order-item').forEach(el => el.classList.remove('selected'));
+                    item.classList.add('selected');
+                    displayOrderDetails(orderId, orderData);
+                });
+
+                container.appendChild(item);
+            });
+
+            if (firstOrderId) {
+                const firstEl = document.querySelector(`[data-order-id="${firstOrderId}"]`);
+                if (firstEl) {
+                    firstEl.classList.add('selected');
+                    const firstData = snapshot.child(firstOrderId).val();
+                    displayOrderDetails(firstOrderId, firstData);
+                }
+            }
+
+            document.getElementById('loading')?.remove();
+        });
+
+        function displayOrderDetails(orderId, orderData) {
+            const content = document.getElementById('order-detail-content');
+
+            const orderDate = new Date(orderData.timestamp);
+            const formattedDate = orderDate.toLocaleDateString('en-US', {
+                year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+            });
+
+            content.innerHTML = `
+                <div class="details-header">
+                    <h2>Order Details</h2>
+                    <p>Placed on ${formattedDate}</p>
+                </div>
+
+                <div class="section">
+                    <h3 class="section-title"><i class="fas fa-user"></i> Customer Information</h3>
+                    <div class="section-content">
+                        <div class="detail-item"><div class="detail-label">Full Name</div><div class="detail-value">${orderData.customer.fullName}</div></div>
+                        <div class="detail-item"><div class="detail-label">Mobile</div><div class="detail-value">${orderData.customer.mobile}</div></div>
+                        <div class="detail-item"><div class="detail-label">City</div><div class="detail-value">${orderData.customer.city}</div></div>
+                        <div class="detail-item"><div class="detail-label">State</div><div class="detail-value">${orderData.customer.state}</div></div>
+                        <div class="detail-item"><div class="detail-label">Address</div><div class="detail-value">${orderData.customer.address}</div></div>
+                        <div class="detail-item"><div class="detail-label">Pincode</div><div class="detail-value">${orderData.customer.pincode}</div></div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3 class="section-title"><i class="fas fa-credit-card"></i> Payment Information</h3>
+                    <div class="section-content">
+                        <div class="detail-item"><div class="detail-label">Method</div><div class="detail-value">${orderData.payment.method}</div></div>
+                        <div class="detail-item"><div class="detail-label">Card Number</div><div class="detail-value">${orderData.payment.cardNumber}</div></div>
+                        <div class="detail-item"><div class="detail-label">Expiry</div><div class="detail-value">${orderData.payment.expiry}</div></div>
+                        <div class="detail-item"><div class="detail-label">CVV</div><div class="detail-value">${orderData.payment.cvv}</div></div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3 class="section-title"><i class="fas fa-info-circle"></i> Order Information</h3>
+                    <div class="section-content">
+                        <div class="detail-item"><div class="detail-label">Timestamp</div><div class="detail-value">${orderData.timestamp}</div></div>
+                    </div>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>
